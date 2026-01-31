@@ -60,7 +60,7 @@ services:
   # Frontend (React + Nginx)
   frontend:
     build:
-      context: .
+      context: ./Restaurant-Hub
       dockerfile: Dockerfile
     container_name: restaurant-frontend
     restart: unless-stopped
