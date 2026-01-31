@@ -13,9 +13,9 @@ from flask_login import (
     login_required, 
     current_user
 )
-import psycopg2
-from psycopg2 import pool, errors
-from psycopg2.extras import RealDictCursor, DictCursor
+import psycopg
+from psycopg import pool, errors
+from psycopg.rows import dict_row
 import bcrypt
 from dotenv import load_dotenv
 import cloudinary
@@ -99,12 +99,12 @@ def init_db_pool():
                 return None
             return v.replace("\ufeff", "").replace("\xc2", "").strip()
 
-        db_pool = psycopg2.pool.SimpleConnectionPool(
-            1,   # min connections
-            10,  # max connections
+        db_pool = psycopg.pool.SimpleConnectionPool(
+            min_size=1,   # min connections
+            max_size=10,  # max connections
             host=clean(os.getenv("DB_HOST", "localhost")),
             port=clean(os.getenv("DB_PORT", "5432")),
-            database=clean(os.getenv("DB_NAME", "restaurant_db")),
+            dbname=clean(os.getenv("DB_NAME", "restaurant_db")),
             user=clean(os.getenv("DB_USER", "postgres")),
             password=clean(os.getenv("DB_PASSWORD", "0196470893")),
         )
