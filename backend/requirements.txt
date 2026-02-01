@@ -2,7 +2,7 @@
 Flask==2.3.3
 Flask-CORS==4.0.0
 Flask-Login==0.6.3
-psycopg[binary]==3.1.18  # ✅ تغيير إلى الإصدار المتوافق
+psycopg2-binary==2.9.9  # ⬅️ هذا هو الإصلاح!
 python-dotenv==1.0.0
 bcrypt==4.1.2
 cloudinary==1.39.0
