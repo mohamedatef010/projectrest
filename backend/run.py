@@ -12,14 +12,15 @@ if __name__ == '__main__':
     init_db_pool()
     
     port = int(os.getenv('PORT', 3000))
+    server_ip = "5.35.94.240"
     
     print("=" * 50)
     print("🚀 Istanbul Restaurant API Starting...")
     print("=" * 50)
-    print(f"📍 Backend URL: http://localhost:{port}")
-    print(f"📍 API Base: http://localhost:{port}/api")
-    print(f"📍 WebSocket: ws://localhost:{port}")
-    print(f"📍 Frontend: http://localhost:5173")
+    print(f"📍 Server IP: {server_ip}")
+    print(f"📍 Backend URL: http://{server_ip}:{port}")
+    print(f"📍 API Base: http://{server_ip}:{port}/api")
+    print(f"📍 WebSocket: ws://{server_ip}:{port}")
     print(f"☁️  Cloudinary: {os.getenv('CLOUDINARY_CLOUD_NAME')}")
     print(f"🗄️  Database: {os.getenv('DB_NAME')}")
     print(f"👤 Admin: admin@istanbul.ru / admin123")

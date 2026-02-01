@@ -21,16 +21,23 @@ from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
 import traceback
-# ✅ إضافة هذا السطر الجديد فقط
 from flask_socketio import SocketIO, emit
 
 load_dotenv()
 
 app = Flask(__name__)
 
-# ✅ تحديث إعدادات CORS
-# في بداية app.py بعد imports، تحديث إعدادات CORS
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
+# ✅ تحديث إعدادات CORS للسماح بالسيرفر الجديد
+server_ip = "5.35.94.240"  # عنوان السيرفر الجديد
+allowed_origins = [
+    f"http://{server_ip}:8080",  # Frontend على السيرفر
+    f"http://{server_ip}:5173",  # Vite dev server
+    f"http://localhost:5173",  # Local dev
+    f"http://127.0.0.1:5173",  # Local dev
+    "https://resturant-front-io2a-ngxxzmw7t-mohamedatef010s-projects.vercel.app",
+    "https://resturant-front-io2a.vercel.app"
+]
+
 CORS(app, 
      supports_credentials=True,
      origins=allowed_origins,
@@ -50,6 +57,7 @@ def after_request(response):
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
+
 # ✅ إعدادات Cloudinary
 cloudinary.config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', 'dsqa2mswb'),
@@ -70,23 +78,17 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# ✅ إعداد WebSocket للتحديثات الفورية
-# ✅ تحديث إعدادات SocketIO
+# ✅ إعداد WebSocket مع عنوان السيرفر الجديد
 socketio = SocketIO(app, 
                     cors_allowed_origins=allowed_origins,
                     async_mode='threading',
                     ping_timeout=60,
                     ping_interval=25,
-                    logger=False,  # ⚠️ غير إلى False للإنتاج
-                    engineio_logger=False)  # ⚠️ غير إلى False للإنتاج
+                    logger=True,
+                    engineio_logger=True)
 
 # ✅ تهيئة connection pool
 db_pool = None
-print("DB_HOST =", repr(os.getenv("DB_HOST")))
-print("DB_PORT =", repr(os.getenv("DB_PORT")))
-print("DB_NAME =", repr(os.getenv("DB_NAME")))
-print("DB_USER =", repr(os.getenv("DB_USER")))
-print("DB_PASSWORD =", repr(os.getenv("DB_PASSWORD")))
 
 def init_db_pool():
     """Initialize database connection pool"""
@@ -97,7 +99,7 @@ def init_db_pool():
         def clean(v):
             if v is None:
                 return None
-            return v.replace("\ufeff", "").replace("\xc2", "").strip()
+            return str(v).replace("\ufeff", "").replace("\xc2", "").strip()
 
         db_pool = psycopg.pool.SimpleConnectionPool(
             min_size=1,   # min connections
@@ -139,8 +141,8 @@ def get_db_connection():
     try:
         conn = db_pool.getconn()
         if conn and not conn.closed:
-                # ✅ إضافة هذا السطر لحل مشكلة الترميز
-                conn.set_client_encoding('UTF8')
+            # ✅ إضافة هذا السطر لحل مشكلة الترميز
+            conn.set_client_encoding('UTF8')
         return conn
     except Exception as e:
         print(f"❌ Failed to get database connection: {e}")
@@ -175,7 +177,7 @@ def load_user(user_id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT id, email, first_name, last_name, is_admin 
                 FROM users WHERE id = %s
@@ -286,7 +288,8 @@ def test():
         'success': True,
         'message': 'API is working',
         'timestamp': datetime.now().isoformat(),
-        'service': 'Istanbul Restaurant API'
+        'service': 'Istanbul Restaurant API',
+        'server_ip': server_ip
     })
 
 @app.route('/api/test-db', methods=['GET'])
@@ -295,7 +298,7 @@ def test_db():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT NOW() as time, version() as version")
             result = cur.fetchone()
             return jsonify({
@@ -321,9 +324,9 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'service': 'Istanbul Restaurant API',
         'version': '1.0.0',
-        'frontend': 'http://localhost:5173',
-        'backend': 'http://localhost:3000',
-        'proxy_enabled': True
+        'server_ip': server_ip,
+        'backend_port': 3000,
+        'database_connected': db_pool is not None
     })
 
 # ==================== Authentication Routes ====================
@@ -370,7 +373,7 @@ def login():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute("SELECT * FROM users WHERE email = %s", (email,))
                 user_data = cur.fetchone()
                 
@@ -450,7 +453,7 @@ def reset_admin_password():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 # Check if user exists
                 cur.execute("SELECT id FROM users WHERE email = 'admin@istanbul.ru'")
                 user = cur.fetchone()
@@ -552,8 +555,7 @@ def get_categories():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # ✅ تم الإصلاح: إرجاع أسماء أعمدة متوافقة مع Frontend
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -598,7 +600,7 @@ def create_category():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute("""
                     INSERT INTO categories (name, description, order_index)
                     VALUES (%s, %s, %s)
@@ -664,7 +666,7 @@ def update_category(id):
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 # خريطة بين أسماء frontend وأسماء أعمدة قاعدة البيانات
                 field_mapping = {
                     'name': 'name',
@@ -747,7 +749,7 @@ def delete_category(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             # جلب بيانات الفئة قبل الحذف
             cur.execute("SELECT name FROM categories WHERE id = %s", (id,))
             category = cur.fetchone()
@@ -808,7 +810,7 @@ def get_menu_items():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT 
                     mi.id,
@@ -818,7 +820,6 @@ def get_menu_items():
                     mi.price,
                     mi.original_price as "originalPrice",
                     mi.category_id as "categoryId",
-                    -- تأكد من أن is_available يتم إرجاعه بشكل صحيح
                     COALESCE(mi.is_available, true) as "isAvailable",
                     mi.is_featured as "isFeatured",
                     mi.has_discount as "hasDiscount",
@@ -854,13 +855,14 @@ def get_menu_items():
     finally:
         if conn:
             return_db_connection(conn)
+
 @app.route('/api/menu-items/featured', methods=['GET'])
 def get_featured_items():
     """Get featured menu items"""
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -922,8 +924,7 @@ def create_menu_item():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # استخدام أسماء الأعمدة الصحيحة للقاعدة
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute("""
                     INSERT INTO menu_items (
                         name, description, details, price, original_price,
@@ -1008,7 +1009,7 @@ def update_menu_item(id):
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 # خريطة بين أسماء frontend وأسماء أعمدة قاعدة البيانات
                 field_mapping = {
                     'name': 'name',
@@ -1107,7 +1108,7 @@ def delete_menu_item(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             # جلب بيانات العنصر قبل الحذف
             cur.execute("""
                 SELECT name FROM menu_items WHERE id = %s
@@ -1162,7 +1163,7 @@ def create_admin():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 # Delete existing admin
                 cur.execute("DELETE FROM users WHERE email = 'admin@istanbul.ru'")
                 
@@ -1215,7 +1216,7 @@ def get_contact_info():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT * FROM contact_info ORDER BY id DESC LIMIT 1")
             contact = cur.fetchone()
             
@@ -1238,8 +1239,8 @@ def get_contact_info():
                         'saturdayHours': '',
                         'sundayHours': '',
                         'whatsapp': '',
-                        'telegram': '',  # ✅ إضافة جديد
-                        'max': '',  # ✅ إضافة جديد
+                        'telegram': '',
+                        'max': '',
                         'mapEmbedUrl': '',
                         'socialLinks': {'facebook': '', 'instagram': '', 'vk': '', 'mailru': '', 'ozon': ''}
                     }
@@ -1255,7 +1256,7 @@ def get_contact_info():
             else:
                 contact['social_links'] = {'facebook': '', 'instagram': '', 'vk': '', 'mailru': '', 'ozon': ''}
             
-            # ✅ إعادة تسمية الحقول لتناسب Frontend مع إضافة telegram و max
+            # ✅ إعادة تسمية الحقول لتناسب Frontend
             response_data = {
                 'phone': contact.get('phone', ''),
                 'address': contact.get('address', ''),
@@ -1269,8 +1270,8 @@ def get_contact_info():
                 'saturdayHours': contact.get('saturday_hours', ''),
                 'sundayHours': contact.get('sunday_hours', ''),
                 'whatsapp': contact.get('whatsapp', ''),
-                'telegram': contact.get('telegram', ''),  # ✅ إضافة جديد
-                'max': contact.get('max', ''),  # ✅ إضافة جديد
+                'telegram': contact.get('telegram', ''),
+                'max': contact.get('max', ''),
                 'mapEmbedUrl': contact.get('map_embed_url', ''),
                 'socialLinks': contact.get('social_links', {'facebook': '', 'instagram': '', 'vk': '', 'mailru': '', 'ozon': ''})
             }
@@ -1299,8 +1300,8 @@ def get_contact_info():
                 'saturdayHours': '',
                 'sundayHours': '',
                 'whatsapp': '',
-                'telegram': '',  # ✅ إضافة جديد
-                'max': '',  # ✅ إضافة جديد
+                'telegram': '',
+                'max': '',
                 'mapEmbedUrl': '',
                 'socialLinks': {'facebook': '', 'instagram': '', 'vk': '', 'mailru': '', 'ozon': ''}
             }
@@ -1309,8 +1310,6 @@ def get_contact_info():
         if conn:
             return_db_connection(conn)
 
-
-# في main.py، تحديث دالة update_contact_info:
 @app.route('/api/contact-info', methods=['PUT', 'POST'])
 @admin_required
 def update_contact_info():
@@ -1328,7 +1327,7 @@ def update_contact_info():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 # Check if contact info exists
                 cur.execute("SELECT id FROM contact_info LIMIT 1")
                 existing = cur.fetchone()
@@ -1350,7 +1349,7 @@ def update_contact_info():
                     print(f"⚠️ social_links is not dict, type: {type(social_links)}")
                     social_links = {}
                 
-                # تأكد من أن social_links يحتوي على جميع الحقول بما في ذلك الجديدة
+                # تأكد من أن social_links يحتوي على جميع الحقول
                 social_links = {
                     'facebook': social_links.get('facebook', ''),
                     'instagram': social_links.get('instagram', ''),
@@ -1361,12 +1360,11 @@ def update_contact_info():
                 
                 print(f"📤 Final social_links to save: {social_links}")
                 
-                # الحصول على البيانات مع معالجة أسماء الحقول المختلفة
+                # الحصول على البيانات
                 phone = data.get('phone') or ''
                 address = data.get('address') or ''
                 email = data.get('email') or ''
                 opening_hours = data.get('opening_hours') or data.get('openingHours') or ''
-                # أيام الأسبوع الجديدة
                 monday_hours = data.get('monday_hours') or data.get('mondayHours') or ''
                 tuesday_hours = data.get('tuesday_hours') or data.get('tuesdayHours') or ''
                 wednesday_hours = data.get('wednesday_hours') or data.get('wednesdayHours') or ''
@@ -1374,10 +1372,9 @@ def update_contact_info():
                 friday_hours = data.get('friday_hours') or data.get('fridayHours') or ''
                 saturday_hours = data.get('saturday_hours') or data.get('saturdayHours') or ''
                 sunday_hours = data.get('sunday_hours') or data.get('sundayHours') or ''
-                
                 whatsapp = data.get('whatsapp') or ''
-                telegram = data.get('telegram') or ''  # ✅ إضافة جديد
-                max_app = data.get('max') or ''  # ✅ إضافة جديد
+                telegram = data.get('telegram') or ''
+                max_app = data.get('max') or ''
                 map_embed_url = data.get('map_embed_url') or data.get('mapEmbedUrl') or ''
                 
                 if existing:
@@ -1480,7 +1477,7 @@ def update_contact_info():
                 # ✅ إرسال إشعار تحديث فوري
                 safe_socket_emit('contact_info_updated', contact, 'update')
                 
-                # إعادة تنسيق الاستجابة لتتناسب مع ما يتوقعه Frontend
+                # إعادة تنسيق الاستجابة
                 response_data = {
                     'phone': contact.get('phone', ''),
                     'address': contact.get('address', ''),
@@ -1494,8 +1491,8 @@ def update_contact_info():
                     'saturdayHours': contact.get('saturday_hours', ''),
                     'sundayHours': contact.get('sunday_hours', ''),
                     'whatsapp': contact.get('whatsapp', ''),
-                    'telegram': contact.get('telegram', ''),  # ✅ إضافة جديد
-                    'max': contact.get('max', ''),  # ✅ إضافة جديد
+                    'telegram': contact.get('telegram', ''),
+                    'max': contact.get('max', ''),
                     'mapEmbedUrl': contact.get('map_embed_url', ''),
                     'socialLinks': contact.get('social_links', {
                         'facebook': '', 
@@ -1608,7 +1605,7 @@ def upload_site_image():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute("""
                     INSERT INTO site_images 
                     (image_type, image_url, public_id, alt_text, description) 
@@ -1719,7 +1716,7 @@ def upload_menu_image():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor(row_factory=dict_row) as cur:
                 # Check if this is the first image for this menu item
                 cur.execute("""
                     SELECT COUNT(*) FROM menu_images WHERE menu_item_id = %s
@@ -1778,7 +1775,7 @@ def get_site_images():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -1814,7 +1811,7 @@ def delete_site_image(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             # Get image info before deleting
             cur.execute("SELECT image_url, public_id FROM site_images WHERE id = %s", (id,))
             image = cur.fetchone()
@@ -1869,7 +1866,7 @@ def get_menu_images(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -1977,8 +1974,10 @@ if __name__ == '__main__':
     print("=" * 50)
     print("🚀 Istanbul Restaurant API Starting...")
     print("=" * 50)
-    print(f"📍 Server: http://localhost:3000")
-    print(f"📡 WebSocket: ws://localhost:3000 (Real-time updates enabled)")
+    print(f"📍 Server IP: {server_ip}")
+    print(f"📍 Backend URL: http://{server_ip}:3000")
+    print(f"📍 API Base: http://{server_ip}:3000/api")
+    print(f"📍 WebSocket: ws://{server_ip}:3000")
     print(f"☁️  Cloudinary: {cloudinary.config().cloud_name}")
     print(f"🗄️  Database: {os.getenv('DB_NAME', 'restaurant_db')}")
     print(f"👤 Admin: admin@istanbul.ru / admin123")
