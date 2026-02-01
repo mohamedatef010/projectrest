@@ -10,7 +10,7 @@ services:
     environment:
       POSTGRES_DB: restaurant_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 0196470893
+      POSTGRES_PASSWORD: admin123
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -38,7 +38,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=restaurant_db
       - DB_USER=postgres
-      - DB_PASSWORD=0196470893
+      - DB_PASSWORD=admin123
       # Flask
       - SECRET_KEY=istanbul-restaurant-production-secret-2024-5-35-94-240
       - FLASK_ENV=production
