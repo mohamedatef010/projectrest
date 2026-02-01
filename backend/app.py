@@ -51,6 +51,8 @@ _env_origins = os.getenv("ALLOWED_ORIGINS", "")
 allowed_origins = _default_origins + [o.strip() for o in _env_origins.split(",") if o.strip()]
 allowed_origins = list(dict.fromkeys(allowed_origins))  # بدون تكرار
 
+server_ip = os.getenv("SERVER_IP", "5.35.94.240")
+
 CORS(app, 
      supports_credentials=True,
      origins=allowed_origins,
