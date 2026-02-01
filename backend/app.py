@@ -15,7 +15,6 @@ from flask_login import (
 )
 import psycopg
 from psycopg_pool import ConnectionPool
-import psycopg.pool as pool
 from psycopg import errors
 from psycopg.rows import dict_row
 import bcrypt
