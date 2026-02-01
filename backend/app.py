@@ -13,10 +13,10 @@ from flask_login import (
     login_required, 
     current_user
 )
-import psycopg
-from psycopg_pool import ConnectionPool
-from psycopg import errors
-from psycopg.rows import dict_row
+import psycopg2
+from psycopg2 import pool
+import psycopg2.errors
+from psycopg2.extras import RealDictCursor, DictRow
 import bcrypt
 from dotenv import load_dotenv
 import cloudinary
@@ -94,16 +94,17 @@ db_pool = None
 def init_db_pool():
     global db_pool
     try:
-        db_pool = ConnectionPool(
-            min_size=1,
-            max_size=10,
-            host=os.getenv("DB_HOST", "localhost"),
-            port=os.getenv("DB_PORT", "5432"),
-            dbname=os.getenv("DB_NAME", "restaurant_db"),
+        # استخدام SimpleConnectionPool من psycopg2
+        db_pool = psycopg2.pool.SimpleConnectionPool(
+            minconn=1,
+            maxconn=10,
+            host=os.getenv("DB_HOST", "restaurant-postgres"),
+            port=int(os.getenv("DB_PORT", "5432")),
+            database=os.getenv("DB_NAME", "restaurant_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "0196470893"),
+            password=os.getenv("DB_PASSWORD", "0196470893")
         )
-        print("✅ Database pool initialized successfully")
+        print("✅ Database pool initialized successfully with psycopg2")
 
         # اختبار الاتصال
         conn = db_pool.getconn()
@@ -117,6 +118,7 @@ def init_db_pool():
 
     except Exception as e:
         print(f"❌ Error initializing database pool: {e}")
+        traceback.print_exc()
         db_pool = None
 
 
@@ -138,6 +140,7 @@ def get_db_connection():
         return conn
     except Exception as e:
         print(f"❌ Failed to get database connection: {e}")
+        traceback.print_exc()
         raise
 
 
@@ -169,7 +172,7 @@ def load_user(user_id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT id, email, first_name, last_name, is_admin 
                 FROM users WHERE id = %s
@@ -290,7 +293,7 @@ def test_db():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT NOW() as time, version() as version")
             result = cur.fetchone()
             return jsonify({
@@ -300,6 +303,7 @@ def test_db():
             })
     except Exception as e:
         print(f"❌ Database test error: {e}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -365,7 +369,7 @@ def login():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("SELECT * FROM users WHERE email = %s", (email,))
                 user_data = cur.fetchone()
                 
@@ -415,7 +419,7 @@ def login():
                 
         except Exception as e:
             print(f"❌ Login error: {e}")
-            print(traceback.format_exc())
+            traceback.print_exc()
             return jsonify({
                 'success': False,
                 'message': 'Internal server error'
@@ -426,7 +430,7 @@ def login():
                 
     except Exception as e:
         print(f"❌ Login endpoint error: {e}")
-        print(traceback.format_exc())
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'message': 'Internal server error'
@@ -445,7 +449,7 @@ def reset_admin_password():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # Check if user exists
                 cur.execute("SELECT id FROM users WHERE email = 'admin@istanbul.ru'")
                 user = cur.fetchone()
@@ -481,6 +485,7 @@ def reset_admin_password():
                 
         except Exception as e:
             print(f"❌ Error resetting password: {e}")
+            traceback.print_exc()
             return jsonify({
                 'success': False,
                 'error': str(e)
@@ -491,6 +496,7 @@ def reset_admin_password():
                 
     except Exception as e:
         print(f"❌ Reset password error: {e}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': 'Internal server error'
@@ -547,7 +553,7 @@ def get_categories():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -567,6 +573,7 @@ def get_categories():
             })
     except Exception as e:
         print(f"❌ Error fetching categories: {e}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': 'Internal server error'
@@ -592,7 +599,7 @@ def create_category():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     INSERT INTO categories (name, description, order_index)
                     VALUES (%s, %s, %s)
@@ -658,7 +665,7 @@ def update_category(id):
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # خريطة بين أسماء frontend وأسماء أعمدة قاعدة البيانات
                 field_mapping = {
                     'name': 'name',
@@ -741,7 +748,7 @@ def delete_category(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # جلب بيانات الفئة قبل الحذف
             cur.execute("SELECT name FROM categories WHERE id = %s", (id,))
             category = cur.fetchone()
@@ -802,7 +809,7 @@ def get_menu_items():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
                     mi.id,
@@ -854,7 +861,7 @@ def get_featured_items():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -916,7 +923,7 @@ def create_menu_item():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     INSERT INTO menu_items (
                         name, description, details, price, original_price,
@@ -1001,7 +1008,7 @@ def update_menu_item(id):
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # خريطة بين أسماء frontend وأسماء أعمدة قاعدة البيانات
                 field_mapping = {
                     'name': 'name',
@@ -1100,7 +1107,7 @@ def delete_menu_item(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # جلب بيانات العنصر قبل الحذف
             cur.execute("""
                 SELECT name FROM menu_items WHERE id = %s
@@ -1155,7 +1162,7 @@ def create_admin():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # Delete existing admin
                 cur.execute("DELETE FROM users WHERE email = 'admin@istanbul.ru'")
                 
@@ -1208,7 +1215,7 @@ def get_contact_info():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM contact_info ORDER BY id DESC LIMIT 1")
             contact = cur.fetchone()
             
@@ -1319,7 +1326,7 @@ def update_contact_info():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # Check if contact info exists
                 cur.execute("SELECT id FROM contact_info LIMIT 1")
                 existing = cur.fetchone()
@@ -1597,7 +1604,7 @@ def upload_site_image():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     INSERT INTO site_images 
                     (image_type, image_url, public_id, alt_text, description) 
@@ -1708,7 +1715,7 @@ def upload_menu_image():
         conn = None
         try:
             conn = get_db_connection()
-            with conn.cursor(row_factory=dict_row) as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # Check if this is the first image for this menu item
                 cur.execute("""
                     SELECT COUNT(*) FROM menu_images WHERE menu_item_id = %s
@@ -1767,7 +1774,7 @@ def get_site_images():
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -1788,6 +1795,7 @@ def get_site_images():
             })
     except Exception as e:
         print(f"❌ Error fetching site images: {e}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': 'Internal server error'
@@ -1803,7 +1811,7 @@ def delete_site_image(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get image info before deleting
             cur.execute("SELECT image_url, public_id FROM site_images WHERE id = %s", (id,))
             image = cur.fetchone()
@@ -1844,6 +1852,7 @@ def delete_site_image(id):
                 
     except Exception as e:
         print(f"❌ Error deleting site image: {e}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
@@ -1858,7 +1867,7 @@ def get_menu_images(id):
     conn = None
     try:
         conn = get_db_connection()
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT 
                     id,
@@ -1878,6 +1887,7 @@ def get_menu_images(id):
             })
     except Exception as e:
         print(f"❌ Error fetching menu images: {e}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': 'Internal server error'
@@ -1920,6 +1930,7 @@ def get_dashboard_stats():
             })
     except Exception as e:
         print(f"❌ Error fetching dashboard stats: {e}")
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': str(e)
