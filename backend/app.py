@@ -5,6 +5,7 @@ from decimal import Decimal
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_login import (
     LoginManager, 
     UserMixin, 
@@ -27,17 +28,23 @@ from flask_socketio import SocketIO, emit
 load_dotenv()
 
 app = Flask(__name__)
+# ✅ ضروري خلف nginx: حتى تعمل الجلسة والكوكيز بشكل صحيح
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-# ✅ تحديث إعدادات CORS للسماح بالسيرفر الجديد
-server_ip = "5.35.94.240"  # عنوان السيرفر الجديد
-allowed_origins = [
-    f"http://{server_ip}:8080",  # Frontend على السيرفر
-    f"http://{server_ip}:5173",  # Vite dev server
-    f"http://localhost:5173",  # Local dev
-    f"http://127.0.0.1:5173",  # Local dev
+# ✅ CORS: قراءة من متغير البيئة أو استخدام القائمة الافتراضية (تشمل السيرفر على البورت 80)
+_default_origins = [
+    "http://5.35.94.240",
+    "http://5.35.94.240:80",
+    "http://5.35.94.240:3000",
+    "http://5.35.94.240:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://resturant-front-io2a-ngxxzmw7t-mohamedatef010s-projects.vercel.app",
-    "https://resturant-front-io2a.vercel.app"
+    "https://resturant-front-io2a.vercel.app",
 ]
+_env_origins = os.getenv("ALLOWED_ORIGINS", "")
+allowed_origins = _default_origins + [o.strip() for o in _env_origins.split(",") if o.strip()]
+allowed_origins = list(dict.fromkeys(allowed_origins))  # بدون تكرار
 
 CORS(app, 
      supports_credentials=True,
@@ -52,7 +59,7 @@ CORS(app,
 def after_request(response):
     """Add CORS headers to all responses"""
     origin = request.headers.get('Origin')
-    if origin in allowed_origins:
+    if origin and origin in allowed_origins:
         response.headers.add('Access-Control-Allow-Origin', origin)
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
@@ -379,12 +386,11 @@ def login():
                         'message': 'Invalid email or password'
                     }), 401
                 
-                # ✅ مقارنة مباشرة بدون تشفير
-                stored_password = user_data['password']
+                # ✅ دعم أسماء الأعمدة بأحرف صغيرة (PostgreSQL) أو مختلفة
+                row = dict(user_data)
+                stored_password = row.get('password')
                 
-                # ✅ إذا كانت كلمة المرور فارغة أو لا تتطابق
                 if stored_password is None or stored_password != password:
-                    # ✅ للتوافق مع البيانات الموجودة
                     if stored_password == '$2b$12$X8U2vQ5k7z6W9a8b7c6d5e' and password == 'admin123':
                         print("⚠️ Using hardcoded password match for compatibility")
                     else:
@@ -393,13 +399,16 @@ def login():
                             'message': 'Invalid email or password'
                         }), 401
                 
-                # ✅ إنشاء كائن المستخدم
+                # ✅ تحويل is_admin إلى bool (PostgreSQL قد يرجع True/False أو t/f)
+                is_admin = row.get('is_admin', False)
+                if isinstance(is_admin, str):
+                    is_admin = is_admin.lower() in ('true', 't', '1', 'yes')
                 user = User(
-                    id=user_data['id'],
-                    email=user_data['email'],
-                    first_name=user_data['first_name'],
-                    last_name=user_data['last_name'],
-                    is_admin=user_data['is_admin']
+                    id=int(row.get('id', 0)),
+                    email=str(row.get('email', '')),
+                    first_name=row.get('first_name') or '',
+                    last_name=row.get('last_name') or '',
+                    is_admin=bool(is_admin)
                 )
                 
                 # ✅ تسجيل دخول المستخدم

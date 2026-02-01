@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getApiUrl } from "@/lib/api";
 
 interface User {
   id: number;
@@ -18,9 +19,8 @@ export function useAuth() {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch("/api/auth/user", {
-        credentials: "include",
-      });
+      const url = getApiUrl("auth/user");
+      const response = await fetch(url, { credentials: "include" });
       
       if (response.ok) {
         const data = await response.json();
@@ -37,19 +37,22 @@ export function useAuth() {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch("/api/login", {
+      const url = getApiUrl("login");
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ email, password }),
       });
-      
-      const data = await response.json();
+      const data = await response.json().catch(() => ({
+        success: false,
+        message: response.ok ? "Invalid response" : "Server error",
+      }));
       if (data.success) {
         setUser(data.user);
         return { success: true, user: data.user };
       }
-      return { success: false, message: data.message };
+      return { success: false, message: data.message ?? "Login failed" };
     } catch (error) {
       console.error("Login error:", error);
       return { success: false, message: "Network error" };
@@ -58,10 +61,8 @@ export function useAuth() {
 
   const logout = async () => {
     try {
-      await fetch("/api/logout", { 
-        method: "POST",
-        credentials: "include",
-      });
+      const url = getApiUrl("logout");
+      await fetch(url, { method: "POST", credentials: "include" });
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
