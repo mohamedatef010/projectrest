@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
+import { getApiUrl } from "@/lib/api";
 import NotFound from "@/pages/not-found";
 import { useEffect, useState } from "react";
 
@@ -17,15 +18,11 @@ import MenuManagement from "@/pages/admin/MenuManagement";
 import Settings from "@/pages/admin/Settings";
 import ImageManager from "@/pages/admin/ImageManager";
 
-// ✅ جعل الخادم الأولي قابل للتعديل
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
-
-// ✅ فحص اتصال API
+// ✅ فحص اتصال API (يستخدم نفس منطق api.ts: نسبي في الإنتاج /api)
 async function checkApiHealth() {
   try {
-    const response = await fetch(`${API_BASE_URL}/test`, {
-      credentials: "include",
-    });
+    const url = getApiUrl("test");
+    const response = await fetch(url, { credentials: "include" });
     return response.ok;
   } catch (error) {
     console.error("API connection error:", error);
@@ -52,12 +49,12 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
             Cannot connect to the server. Please make sure:
           </p>
           <ul className="text-left text-sm text-muted-foreground mb-6 space-y-2">
-            <li>• Backend server is running on port 3000</li>
+            <li>• Backend server is running</li>
             <li>• PostgreSQL database is started</li>
             <li>• No firewall blocking the connection</li>
           </ul>
           <div className="text-xs text-muted-foreground mt-4">
-            Backend URL: {API_BASE_URL}
+            Tried: {getApiUrl("test")}
           </div>
         </div>
       </div>
