@@ -5,7 +5,11 @@ from decimal import Decimal
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from werkzeug.middleware.proxy_fix import ProxyFix
+try:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    _proxy_fix_available = True
+except ImportError:
+    _proxy_fix_available = False
 from flask_login import (
     LoginManager, 
     UserMixin, 
@@ -28,8 +32,9 @@ from flask_socketio import SocketIO, emit
 load_dotenv()
 
 app = Flask(__name__)
-# ✅ ضروري خلف nginx: حتى تعمل الجلسة والكوكيز بشكل صحيح
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+# ✅ ضروري خلف nginx: حتى تعمل الجلسة والكوكيز بشكل صحيح (اختياري إذا لم يكن ProxyFix متوفراً)
+if _proxy_fix_available:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # ✅ CORS: قراءة من متغير البيئة أو استخدام القائمة الافتراضية (تشمل السيرفر على البورت 80)
 _default_origins = [
