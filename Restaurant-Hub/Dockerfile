@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# ✅ التعديل: استخدام npm install بدلاً من npm ci --only=production
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -31,8 +31,9 @@ FROM nginx:alpine
 # Install curl for healthcheck
 RUN apk add --no-cache curl
 
-# Copy built application
-COPY --from=builder /app/dist/public /usr/share/nginx/html
+# ✅ التعديل: المسار الصحيح للملفات المبنية
+# Vite يبني الملفات في /app/dist وليس /app/dist/public
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
