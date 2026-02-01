@@ -23,8 +23,7 @@ import cloudinary.uploader
 import traceback
 # ✅ إضافة هذا السطر الجديد فقط
 from flask_socketio import SocketIO, emit
-import psycopg/import psycopg2 as psycopg
-from psycopg import pool, errors/from psycopg2 import pool, errors
+
 load_dotenv()
 
 app = Flask(__name__)
