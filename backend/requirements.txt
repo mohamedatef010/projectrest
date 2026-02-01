@@ -1,8 +1,8 @@
-# requirements.txt - متوافق مع Python 3.11
+# requirements.txt - متوافق مع Python 3.11+
 Flask==2.3.3
 Flask-CORS==4.0.0
 Flask-Login==0.6.3
-psycopg>=3.1.0  # ✅ متوافق مع Python 3.13
+psycopg[binary,pool]>=3.1.0
 python-dotenv==1.0.0
 bcrypt==4.1.2
 cloudinary==1.39.0
