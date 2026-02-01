@@ -4,24 +4,28 @@
  */
 
 // Get API URL from environment variable or use default
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 /**
  * Get the full API URL for a given endpoint
- * @param endpoint - The API endpoint (e.g., '/categories', '/menu-items')
+ * - Development: relative URL (Vite proxy to backend)
+ * - Production مع نفس الدومين: /api/... (نفس البورت 80، nginx يوجه للباك إند)
+ * - Production مع دومين/بورت مختلف: VITE_API_URL كامل
+ * @param endpoint - The API endpoint (e.g., 'categories', 'menu-items')
  * @returns Full API URL
  */
 export function getApiUrl(endpoint: string): string {
-  // Remove leading slash if present to avoid double slashes
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.slice(1) : endpoint;
-  
-  // In development with Vite proxy, use relative URLs
+
   if (import.meta.env.DEV) {
     return `/${cleanEndpoint}`;
   }
-  
-  // In production, use full API URL
-  // Remove /api from API_URL if endpoint already starts with api/
+
+  // Production: إذا VITE_API_URL فارغ أو يبدأ بـ / نستخدم نفس الدومين (نفس البورت)
+  if (!API_URL || API_URL.trim() === '' || API_URL.startsWith('/')) {
+    return `/api/${cleanEndpoint}`;
+  }
+
   const baseUrl = API_URL.replace(/\/api\/?$/, '');
   return `${baseUrl}/${cleanEndpoint}`;
 }

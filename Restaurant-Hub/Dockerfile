@@ -12,9 +12,11 @@ ARG VITE_SOCKET_URL
 ARG VITE_APP_NAME
 RUN npm run build
 
-# مرحلة Nginx
+# مرحلة Nginx - مخرجات Vite تكون في dist/public (حسب vite.config outDir)
 FROM nginx:stable-alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
+# إزالة صفحة nginx الافتراضية حتى لا تظهر "Welcome to nginx!"
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist/public /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/nginx.conf
 
 EXPOSE 80

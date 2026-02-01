@@ -159,24 +159,25 @@ docker exec -i restaurant-postgres psql -U postgres -d restaurant_db < Restauran
 http://5.35.94.240
 ```
 
-### Backend API
+### Backend API (عبر نفس الدومين – يمر عبر nginx)
 ```
-http://5.35.94.240:3000/api
+http://5.35.94.240/api
 ```
+(البورت 3000 لا يحتاج أن يكون مفتوحاً من الخارج؛ nginx يوجه `/api` و`/socket.io` إلى الباك إند داخلياً.)
 
-### API Endpoints للاختبار
+### API Endpoints للاختبار (عبر نفس الدومين)
 ```bash
 # Health Check
-curl http://5.35.94.240:3000/api/health
+curl http://5.35.94.240/api/health
 
 # Test Database
-curl http://5.35.94.240:3000/api/test-db
+curl http://5.35.94.240/api/test-db
 
 # Get Categories
-curl http://5.35.94.240:3000/api/categories
+curl http://5.35.94.240/api/categories
 
 # Get Menu Items
-curl http://5.35.94.240:3000/api/menu-items
+curl http://5.35.94.240/api/menu-items
 ```
 
 ### تسجيل الدخول للوحة التحكم
@@ -201,6 +202,31 @@ docker compose restart backend
 # الدخول إلى container للتحقق
 docker exec -it restaurant-backend bash
 python -c "import psycopg; print('psycopg OK')"
+```
+
+### مشكلة: تظهر صفحة "Welcome to nginx!" بدلاً من التطبيق
+هذا يحدث عادةً لأن **nginx مثبت على السيرفر نفسه** (خارج Docker) ويستمع على البورت 80 قبل الـ container.
+
+**الحل 1 – إيقاف nginx على السيرفر (موصى به):**
+```bash
+# إيقاف nginx
+sudo systemctl stop nginx
+
+# منع تشغيله تلقائياً (اختياري)
+sudo systemctl disable nginx
+
+# التأكد أن البورت 80 حر
+sudo ss -tlnp | grep :80
+# يجب أن ترى docker-proxy وليس nginx
+```
+
+**الحل 2 – إذا أردت الإبقاء على nginx على السيرفر:**  
+اضبط nginx على السيرفر ليعمل كـ reverse proxy إلى الـ container (مثلاً `proxy_pass http://127.0.0.1:80` بعد التأكد أن container الفرونت يعمل على 80).
+
+**بعد التعديلات أعد بناء وتشغيل الفرونت:**
+```bash
+docker compose build frontend --no-cache
+docker compose up -d frontend
 ```
 
 ### مشكلة: Frontend لا يتصل بـ Backend
@@ -398,5 +424,5 @@ docker exec -i restaurant-postgres psql -U postgres restaurant_db < backup_20260
 
 **روابط الوصول:**
 - Frontend: http://5.35.94.240
-- Backend API: http://5.35.94.240:3000/api
+- Backend API (عبر nginx): http://5.35.94.240/api
 - Admin Login: http://5.35.94.240/login (admin@istanbul.ru / admin123)
