@@ -14,7 +14,8 @@ from flask_login import (
     current_user
 )
 import psycopg
-from psycopg import pool, errors
+from psycopg_pool import ConnectionPool
+from psycopg import errors
 from psycopg.rows import dict_row
 import bcrypt
 from dotenv import load_dotenv
@@ -91,26 +92,17 @@ socketio = SocketIO(app,
 db_pool = None
 
 def init_db_pool():
-    """Initialize database connection pool"""
     global db_pool
-
     try:
-        # تنظيف قيم env من أي BOM أو محارف خفية
-        def clean(v):
-            if v is None:
-                return None
-            return str(v).replace("\ufeff", "").replace("\xc2", "").strip()
-
-        db_pool = psycopg.pool.SimpleConnectionPool(
-            min_size=1,   # min connections
-            max_size=10,  # max connections
-            host=clean(os.getenv("DB_HOST", "localhost")),
-            port=clean(os.getenv("DB_PORT", "5432")),
-            dbname=clean(os.getenv("DB_NAME", "restaurant_db")),
-            user=clean(os.getenv("DB_USER", "postgres")),
-            password=clean(os.getenv("DB_PASSWORD", "0196470893")),
+        db_pool = ConnectionPool(
+            min_size=1,
+            max_size=10,
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            dbname=os.getenv("DB_NAME", "restaurant_db"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "0196470893"),
         )
-
         print("✅ Database pool initialized successfully")
 
         # اختبار الاتصال
