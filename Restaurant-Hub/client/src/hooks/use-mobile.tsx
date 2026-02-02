@@ -19,12 +19,10 @@ export function useIsMobile() {
   return !!isMobile
 }
 
-// ✅ إضافة Hook جديد للتحكم في ظهور/اختفاء الهيدر على الموبايل
 export function useMobileHeader() {
   const [isVisible, setIsVisible] = React.useState(true)
-  const [lastScrollY, setLastScrollY] = React.useState(0)
-  const [isTouched, setIsTouched] = React.useState(false)
   const isMobile = useIsMobile()
+  const lastScrollYRef = React.useRef(0)
 
   React.useEffect(() => {
     if (!isMobile) {
@@ -34,53 +32,26 @@ export function useMobileHeader() {
 
     const handleScroll = () => {
       const currentScrollY = window.scrollY
-      
-      // إذا كان المستخدم يتحرك للأسفل (للأسفل في الصفحة)، نخفي الهيدر
+      const lastScrollY = lastScrollYRef.current
+
+      // ✅ عند التمرير لأسفل نخفي الهيدر
       if (currentScrollY > lastScrollY && currentScrollY > 50) {
         setIsVisible(false)
-      } 
-      // إذا كان المستخدم يتحرك للأعلى، نظهر الهيدر
-      else if (currentScrollY < lastScrollY) {
+      }
+      // ✅ عند التمرير لأعلى نظهر الهيدر ونتركه ثابتًا
+      else if (currentScrollY < lastScrollY - 5) {
         setIsVisible(true)
       }
-      
-      setLastScrollY(currentScrollY)
-      setIsTouched(false) // إعادة تعيين حالة اللمس بعد التمرير
-    }
 
-    // إظهار الهيدر عند اللمس
-    const handleTouchStart = () => {
-      setIsTouched(true)
-      setIsVisible(true)
-      
-      // إخفاء الهيدر بعد 2 ثانية من عدم النشاط
-      setTimeout(() => {
-        if (!isTouched) {
-          setIsVisible(false)
-        }
-      }, 2000)
-    }
-
-    // إخفاء الهيدر بعد انتهاء اللمس
-    const handleTouchEnd = () => {
-      setIsTouched(false)
-      setTimeout(() => {
-        if (!isTouched && window.scrollY > 100) {
-          setIsVisible(false)
-        }
-      }, 1000)
+      lastScrollYRef.current = currentScrollY
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
-    window.addEventListener('touchstart', handleTouchStart, { passive: true })
-    window.addEventListener('touchend', handleTouchEnd, { passive: true })
     
     return () => {
       window.removeEventListener('scroll', handleScroll)
-      window.removeEventListener('touchstart', handleTouchStart)
-      window.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [isMobile, lastScrollY, isTouched])
+  }, [isMobile])
 
   return { isVisible, setIsVisible }
 }
