@@ -116,7 +116,7 @@ def init_db_pool():
             port=int(os.getenv("DB_PORT", "5432")),
             database=os.getenv("DB_NAME", "restaurant_db"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "admin123")
+            password=os.getenv("DB_PASSWORD", "0196470893mOm")
         )
         print("✅ Database pool initialized successfully with psycopg2")
 
